@@ -8,7 +8,7 @@
     <module name="AlbertMage_Checkout" setup_version="1.0.1">
         <sequence>
             <module name="AlbertMage_Webapi"/>
-            <module name="AlbertMage_Checkout"/>
+            <module name="AlbertMage_Quote"/>
         </sequence>
     </module>
 </config>
