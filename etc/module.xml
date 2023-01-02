@@ -8,6 +8,7 @@
     <module name="AlbertMage_Checkout" setup_version="1.0.1">
         <sequence>
             <module name="AlbertMage_Webapi"/>
+            <module name="AlbertMage_Checkout"/>
         </sequence>
     </module>
 </config>
