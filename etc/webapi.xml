@@ -1,13 +1,12 @@
 <?xml version="1.0" ?>
 <routes xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Webapi:etc/webapi.xsd">
-    <!-- My place order with payment information saving -->
-    <route url="/V1/carts/mine/payment" method="POST">
-        <service class="AlbertMage\Checkout\Api\PaymentInformationManagementInterface" method="savePaymentInformationAndPlaceOrder"/>
+    <route url="/V2/carts/mine/totals" method="POST">
+        <service class="AlbertMage\Checkout\Api\CheckoutManagementInterface" method="getCartTotals"/>
         <resources>
             <resource ref="self" />
         </resources>
         <data>
-            <parameter name="cartId" force="true">%cart_id%</parameter>
+            <parameter name="customerId" force="true">%customer_id%</parameter>
         </data>
     </route>
 </routes>

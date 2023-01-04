@@ -1,4 +1,6 @@
 <?xml version="1.0" ?>
 <config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:framework:ObjectManager/etc/config.xsd">
     <preference for="AlbertMage\Checkout\Api\PaymentInformationManagementInterface" type="AlbertMage\Checkout\Model\PaymentInformationManagement"/>
+    <preference for="AlbertMage\Checkout\Api\CheckoutManagementInterface" type="AlbertMage\Checkout\Model\CheckoutManagement"/>
+    <preference for="AlbertMage\Checkout\Api\Data\CartItemInterface" type="AlbertMage\Checkout\Model\CartItem"/>
 </config>
