@@ -10,4 +10,13 @@
             <parameter name="cartId" force="true">%cart_id%</parameter>
         </data>
     </route>
+    <route url="/V1/checkout/part-checkout/items" method="GET">
+        <service class="AlbertMage\Checkout\Api\CheckoutManagementInterface" method="getQuoteTotals"/>
+        <resources>
+            <resource ref="self" />
+        </resources>
+        <data>
+            <parameter name="cartId" force="true">%cart_id%</parameter>
+        </data>
+    </route>
 </routes>
