@@ -14,9 +14,10 @@ interface CheckoutManagementInterface
      * Get cart totals.
      *
      * @param int $customerId
+     * @param int $cartId
      * @param \AlbertMage\Checkout\Api\Data\CartItemInterface[] $cartItems
      * @return \AlbertMage\Quote\Api\Data\TotalsInterface
      * @throws \Magento\Framework\Exception\LocalizedException
      */
-    public function getCartTotals($customerId, $cartItems);
+    public function getCartTotals($customerId, $cartId, $cartItems);
 }
