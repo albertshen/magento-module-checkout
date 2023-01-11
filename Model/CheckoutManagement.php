@@ -149,6 +149,7 @@ class CheckoutManagement implements CheckoutManagementInterface
      */
     public function getCartTotals($customerId, $cartId, $cartItems)
     {
+        
         if (!$cartId) {
            $cartId = $this->cartManagementInterfaceFactory->create()->createEmptyCartForCustomer($customerId);
         }
@@ -471,6 +472,6 @@ class CheckoutManagement implements CheckoutManagementInterface
         $quote->collectTotals();
 
         return $quote;
-        
+
     }
 }
