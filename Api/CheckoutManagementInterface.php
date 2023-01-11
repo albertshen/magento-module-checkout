@@ -20,4 +20,14 @@ interface CheckoutManagementInterface
      * @throws \Magento\Framework\Exception\LocalizedException
      */
     public function getCartTotals($customerId, $cartId, $cartItems);
+
+    /**
+     * Get quote totals.
+     *
+     * @param int $cartId
+     * @return \AlbertMage\Quote\Api\Data\TotalsInterface
+     * @throws \Magento\Framework\Exception\LocalizedException
+     */
+    public function getQuoteTotals($cartId);
+    
 }
