@@ -186,7 +186,7 @@ class CheckoutManagement implements CheckoutManagementInterface
     /**
      * {@inheritdoc}
      */
-    public function getCartTotals($customerId, $cartItems)
+    public function getCartTotals($customerId)
     {
 
         try {
@@ -194,6 +194,17 @@ class CheckoutManagement implements CheckoutManagementInterface
         } catch (NoSuchEntityException $e) {
             $this->cartManagementInterfaceFactory->create()->createEmptyCartForCustomer($customerId);
         }
+
+        $cart = $this->cart->load($customerId, 'customer_id');
+
+        return $this->generateCartTotals($cart);
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function updateCartTotals($customerId, $cartItems)
+    {
 
         $selectedItems = [];
 
@@ -223,15 +234,40 @@ class CheckoutManagement implements CheckoutManagementInterface
         $quote = $this->quoteRepository->getActive($cartId);
 
         $address = $this->addressInterfaceFactory->create();
-        $address->setCountryId('ZH');
+        $address->setCountryId(self::DEFAULT_COUNTRY_ID);
         $totalsInformation = $this->totalsInformationInterfaceFactory->create();
-        $totalsInformation->setShippingMethodCode('flatrate');
-        $totalsInformation->setShippingCarrierCode('flatrate');
+        $totalsInformation->setShippingMethodCode(self::DEFAULT_DILIVERY_METHOD);
+        $totalsInformation->setShippingCarrierCode(self::DEFAULT_DILIVERY_METHOD);
         $totalsInformation->setAddress($address);
 
         $quote = $this->setAddressInformation($quote, $totalsInformation);
 
         return $this->calculateQuoteTotals($quote);
+
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function oneStepCheckout($customerId, $sku)
+    {
+        try {
+            $quote = $this->quoteRepository->getActiveForCustomer($customerId);
+        } catch (NoSuchEntityException $e) {
+            $cartId = $this->cartManagementInterfaceFactory->create()->createEmptyCartForCustomer($customerId);
+            $quote = $this->quoteRepository->getActive($cartId);
+        }
+
+        $quote->removeAllItems();
+
+        $quoteItem = $this->mageCartItemInterfaceFactory->create();
+        $quoteItem->setSku($sku);
+        $quoteItem->setQty(1);
+        $quoteItems[] = $quoteItem;
+        $quote->setItems($quoteItems);
+        $this->quoteRepository->save($quote);
+
+        return true;
 
     }
 
@@ -252,11 +288,11 @@ class CheckoutManagement implements CheckoutManagementInterface
         $shippingAddress->setCity($address->getCity());
         $shippingAddress->setCityId($address->getCityId());
         $shippingAddress->setStreet([$address->getStreet()]);
-        $shippingAddress->setCountryId('CN');
-        $shippingAddress->setPostcode('2032');
+        $shippingAddress->setCountryId(self::DEFAULT_COUNTRY_ID);
+        $shippingAddress->setPostcode(self::DEFAULT_POST_CODE);
         $shippingAddress->setFirstname($address->getFirstname());
         $shippingAddress->setLastname($address->getLastname());
-        $shippingAddress->setEmail('saf@safs2.com');
+        $shippingAddress->setEmail($address->getEmail());
         $shippingAddress->setTelephone($address->getTelephone());
 
         $billingAddress->setRegion($address->getRegion());
@@ -266,18 +302,18 @@ class CheckoutManagement implements CheckoutManagementInterface
         $billingAddress->setCity($address->getCity());
         $billingAddress->setCityId($address->getCityId());
         $billingAddress->setStreet([$address->getStreet()]);
-        $billingAddress->setCountryId('CN');
-        $billingAddress->setPostcode('2032');
+        $billingAddress->setCountryId(self::DEFAULT_COUNTRY_ID);
+        $billingAddress->setPostcode(self::DEFAULT_POST_CODE);
         $billingAddress->setFirstname($address->getFirstname());
         $billingAddress->setLastname($address->getLastname());
-        $billingAddress->setEmail('saf@safs2.com');
+        $billingAddress->setEmail($address->getEmail());
         $billingAddress->setTelephone($address->getTelephone());
 
         $shippingInformation = $this->shippingInformationFactory->create();
         $shippingInformation->setShippingAddress($shippingAddress);
         $shippingInformation->setBillingAddress($billingAddress);
-        $shippingInformation->setShippingCarrierCode('flatrate');
-        $shippingInformation->setShippingMethodCode('flatrate');
+        $shippingInformation->setShippingCarrierCode(self::DEFAULT_DILIVERY_METHOD);
+        $shippingInformation->setShippingMethodCode(self::DEFAULT_DILIVERY_METHOD);
 
         $this->shippingInformationManagementInterfaceFactory->create()->saveAddressInformation($cartId, $shippingInformation);
 
@@ -395,7 +431,7 @@ class CheckoutManagement implements CheckoutManagementInterface
         if (count($quoteItems) == 1) {
             foreach($cartTotal->getItems() as $cartTotalItem) {
                 $product = $this->productFactory->create()->load($cartTotalItem->getExtensionAttributes()->getProductId());
-                $totalsItem = $this->createTotalsItemByProduct($product);
+                $totalsItem = $this->createTotalsItemByProduct($product, $cartTotalItem->getQty());
                 $this->prepareTotalsItem($totalsItem, $cartTotalItem);
                 $totalsItems[] = $totalsItem;
             }
@@ -404,9 +440,8 @@ class CheckoutManagement implements CheckoutManagementInterface
             $cartItems = $cart->getAllItems();
             foreach($cartItems as $cartItem) {
                 if ($cartTotalItem = $this->getCartTotalItem($cartTotal->getItems(), $cartItem)) {
-                    $totalsItem = $this->createTotalsItemByProduct($cartItem->getProduct(), $cartItem->getQty());
+                    $totalsItem = $this->createTotalsItemByProduct($cartItem->getProduct(), $cartTotalItem->getQty());
                     $this->prepareTotalsItem($totalsItem, $cartTotalItem);
-                    $totalsItem->setItemId($cartItem->getId());
                     $totalsItems[] = $totalsItem;
                 }
             }

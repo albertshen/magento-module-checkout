@@ -12,15 +12,31 @@ use AlbertMage\Checkout\Api\Data\ShippingAddressInterface;
  */
 interface CheckoutManagementInterface
 {
+
+    const DEFAULT_COUNTRY_ID = 'CN';
+
+    const DEFAULT_DILIVERY_METHOD = 'flatrate';
+
+    const DEFAULT_POST_CODE = '000000';
+
     /**
      * Get cart totals.
+     *
+     * @param int $customerId
+     * @return \AlbertMage\Quote\Api\Data\TotalsInterface
+     * @throws \Magento\Framework\Exception\LocalizedException
+     */
+    public function getCartTotals($customerId);
+
+    /**
+     * Update cart totals.
      *
      * @param int $customerId
      * @param \AlbertMage\Checkout\Api\Data\CartItemInterface[] $cartItems
      * @return \AlbertMage\Quote\Api\Data\TotalsInterface
      * @throws \Magento\Framework\Exception\LocalizedException
      */
-    public function getCartTotals($customerId, $cartItems);
+    public function updateCartTotals($customerId, $cartItems);
 
     /**
      * Get quote totals.
@@ -32,7 +48,7 @@ interface CheckoutManagementInterface
     public function getQuoteTotals($cartId);
 
     /**
-     * Save PaymentInformation And PlaceOrder
+     * One step checkout
      *
      * @param int $cartId
      * @param \AlbertMage\Checkout\Api\Data\ShippingAddressInterface $address
@@ -41,4 +57,14 @@ interface CheckoutManagementInterface
      * @throws \Magento\Framework\Exception\LocalizedException
      */
     public function placeOrder($cartId, ShippingAddressInterface $address, $paymentMethod);
+
+    /**
+     * One Step Checkout
+     *
+     * @param int $customerId
+     * @param string $sku
+     * @return bool
+     * @throws \Magento\Framework\Exception\LocalizedException
+     */
+    public function oneStepCheckout($customerId, $sku);
 }
