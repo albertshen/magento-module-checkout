@@ -3,4 +3,5 @@
     <preference for="AlbertMage\Checkout\Api\PaymentInformationManagementInterface" type="AlbertMage\Checkout\Model\PaymentInformationManagement"/>
     <preference for="AlbertMage\Checkout\Api\CheckoutManagementInterface" type="AlbertMage\Checkout\Model\CheckoutManagement"/>
     <preference for="AlbertMage\Checkout\Api\Data\CartItemInterface" type="AlbertMage\Checkout\Model\CartItem"/>
+    <preference for="AlbertMage\Checkout\Api\Data\ShippingAddressInterface" type="AlbertMage\Checkout\Model\ShippingAddress"/>
 </config>

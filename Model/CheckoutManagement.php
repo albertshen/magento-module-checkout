@@ -12,6 +12,8 @@ use AlbertMage\Quote\Api\CartRepositoryInterface;
 use AlbertMage\Quote\Api\CartItemRepositoryInterface;
 use AlbertMage\Quote\Api\Data\TotalsInterfaceFactory;
 use AlbertMage\Quote\Api\Data\TotalsItemInterfaceFactory;
+use AlbertMage\Checkout\Api\Data\ShippingAddressInterface;
+use Magento\Framework\Exception\NoSuchEntityException;
 use Magento\Quote\Api\CartRepositoryInterface as MageCartRepositoryInterface;
 use Magento\Quote\Api\Data\CartItemInterfaceFactory as MageCartItemInterfaceFactory;
 use Magento\Quote\Api\CartManagementInterfaceFactory;
@@ -20,6 +22,11 @@ use Magento\Catalog\Model\ProductFactory;
 use Magento\Checkout\Api\Data\TotalsInformationInterface;
 use Magento\Checkout\Api\Data\TotalsInformationInterfaceFactory;
 use Magento\Quote\Api\Data\AddressInterfaceFactory;
+use Magento\Checkout\Api\ShippingInformationManagementInterfaceFactory;
+use Magento\Checkout\Model\ShippingInformationFactory;
+use Magento\Checkout\Api\PaymentInformationManagementInterfaceFactory;
+use Magento\Quote\Api\Data\PaymentInterfaceFactory;
+
 
 /**
  * Class CheckoutManagement
@@ -100,6 +107,26 @@ class CheckoutManagement implements CheckoutManagementInterface
     protected $addressInterfaceFactory;
 
     /**
+     * @var ShippingInformationManagementInterfaceFactory
+     */
+    protected $shippingInformationManagementInterfaceFactory;
+
+    /**
+     * @var ShippingInformationFactory
+     */
+    protected $shippingInformationFactory;
+
+    /**
+     * @var PaymentInformationManagementInterfaceFactory
+     */
+    protected $paymentInformationManagementInterfaceFactory;
+
+    /**
+     * @var PaymentInterfaceFactory
+     */
+    protected $paymentInterfaceFactory;
+    
+    /**
      * @param MageCartRepositoryInterface $quoteRepository
      * @param CartInterface $cart
      * @param CartRepositoryInterface $cartRepository
@@ -113,6 +140,10 @@ class CheckoutManagement implements CheckoutManagementInterface
      * @param ProductFactory $productFactory
      * @param TotalsInformationInterfaceFactory $totalsInformationInterfaceFactory
      * @param AddressInterfaceFactory $addressInterfaceFactory
+     * @param ShippingInformationManagementInterfaceFactory $shippingInformationManagementInterfaceFactory
+     * @param ShippingInformationFactory $shippingInformationFactory
+     * @param PaymentInformationManagementInterfaceFactory $paymentInformationManagementInterfaceFactory
+     * @param PaymentInterfaceFactory $paymentInterfaceFactory
      */
     public function __construct(
         MageCartRepositoryInterface $quoteRepository,
@@ -127,7 +158,11 @@ class CheckoutManagement implements CheckoutManagementInterface
         CartTotalRepositoryInterface $cartTotalRepository,
         ProductFactory $productFactory,
         TotalsInformationInterfaceFactory $totalsInformationInterfaceFactory,
-        AddressInterfaceFactory $addressInterfaceFactory
+        AddressInterfaceFactory $addressInterfaceFactory,
+        ShippingInformationManagementInterfaceFactory $shippingInformationManagementInterfaceFactory,
+        ShippingInformationFactory $shippingInformationFactory,
+        PaymentInformationManagementInterfaceFactory $paymentInformationManagementInterfaceFactory,
+        PaymentInterfaceFactory $paymentInterfaceFactory
     ) {
         $this->quoteRepository = $quoteRepository;
         $this->cart = $cart;
@@ -142,16 +177,22 @@ class CheckoutManagement implements CheckoutManagementInterface
         $this->productFactory = $productFactory;
         $this->totalsInformationInterfaceFactory = $totalsInformationInterfaceFactory;
         $this->addressInterfaceFactory = $addressInterfaceFactory;
+        $this->shippingInformationManagementInterfaceFactory = $shippingInformationManagementInterfaceFactory;
+        $this->shippingInformationFactory = $shippingInformationFactory;
+        $this->paymentInformationManagementInterfaceFactory = $paymentInformationManagementInterfaceFactory;
+        $this->paymentInterfaceFactory = $paymentInterfaceFactory;
     }
 
     /**
      * {@inheritdoc}
      */
-    public function getCartTotals($customerId, $cartId, $cartItems)
+    public function getCartTotals($customerId, $cartItems)
     {
-        
-        if (!$cartId) {
-           $cartId = $this->cartManagementInterfaceFactory->create()->createEmptyCartForCustomer($customerId);
+
+        try {
+            $quote = $this->quoteRepository->getActiveForCustomer($customerId);
+        } catch (NoSuchEntityException $e) {
+            $this->cartManagementInterfaceFactory->create()->createEmptyCartForCustomer($customerId);
         }
 
         $selectedItems = [];
@@ -177,9 +218,9 @@ class CheckoutManagement implements CheckoutManagementInterface
     /**
      * {@inheritdoc}
      */
-    public function getQuoteTotals($quoteId)
+    public function getQuoteTotals($cartId)
     {
-        $quote = $this->quoteRepository->getActive($quoteId);
+        $quote = $this->quoteRepository->getActive($cartId);
 
         $address = $this->addressInterfaceFactory->create();
         $address->setCountryId('ZH');
@@ -191,6 +232,64 @@ class CheckoutManagement implements CheckoutManagementInterface
         $quote = $this->setAddressInformation($quote, $totalsInformation);
 
         return $this->calculateQuoteTotals($quote);
+
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function placeOrder($cartId, ShippingAddressInterface $address, $paymentMethod)
+    {
+
+        // Save quote address
+        $shippingAddress = $this->addressInterfaceFactory->create();
+        $billingAddress = $this->addressInterfaceFactory->create();
+
+        $shippingAddress->setRegion($address->getRegion());
+        $shippingAddress->setRegionId($address->getRegionId());
+        $shippingAddress->setDistrict($address->getDistrict());
+        $shippingAddress->setDistrictId($address->getDistrictId());
+        $shippingAddress->setCity($address->getCity());
+        $shippingAddress->setCityId($address->getCityId());
+        $shippingAddress->setStreet([$address->getStreet()]);
+        $shippingAddress->setCountryId('CN');
+        $shippingAddress->setPostcode('2032');
+        $shippingAddress->setFirstname($address->getFirstname());
+        $shippingAddress->setLastname($address->getLastname());
+        $shippingAddress->setEmail('saf@safs2.com');
+        $shippingAddress->setTelephone($address->getTelephone());
+
+        $billingAddress->setRegion($address->getRegion());
+        $billingAddress->setRegionId($address->getRegionId());
+        $billingAddress->setDistrict($address->getDistrict());
+        $billingAddress->setDistrictId($address->getDistrictId());
+        $billingAddress->setCity($address->getCity());
+        $billingAddress->setCityId($address->getCityId());
+        $billingAddress->setStreet([$address->getStreet()]);
+        $billingAddress->setCountryId('CN');
+        $billingAddress->setPostcode('2032');
+        $billingAddress->setFirstname($address->getFirstname());
+        $billingAddress->setLastname($address->getLastname());
+        $billingAddress->setEmail('saf@safs2.com');
+        $billingAddress->setTelephone($address->getTelephone());
+
+        $shippingInformation = $this->shippingInformationFactory->create();
+        $shippingInformation->setShippingAddress($shippingAddress);
+        $shippingInformation->setBillingAddress($billingAddress);
+        $shippingInformation->setShippingCarrierCode('flatrate');
+        $shippingInformation->setShippingMethodCode('flatrate');
+
+        $this->shippingInformationManagementInterfaceFactory->create()->saveAddressInformation($cartId, $shippingInformation);
+
+
+        //Set payment method and place order
+        $paymentInformationManagement = $this->paymentInformationManagementInterfaceFactory->create();
+
+        $payment = $this->paymentInterfaceFactory->create();
+        
+        $payment->setMethod($paymentMethod);
+
+        return (int) $paymentInformationManagement->savePaymentInformationAndPlaceOrder($cartId, $payment);
 
     }
 

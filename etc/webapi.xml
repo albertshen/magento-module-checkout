@@ -7,11 +7,19 @@
         </resources>
         <data>
             <parameter name="customerId" force="true">%customer_id%</parameter>
+        </data>
+    </route>
+    <route url="/V1/checkout/quote/totals" method="GET">
+        <service class="AlbertMage\Checkout\Api\CheckoutManagementInterface" method="getQuoteTotals"/>
+        <resources>
+            <resource ref="self" />
+        </resources>
+        <data>
             <parameter name="cartId" force="true">%cart_id%</parameter>
         </data>
     </route>
-    <route url="/V1/checkout/part-checkout/items" method="GET">
-        <service class="AlbertMage\Checkout\Api\CheckoutManagementInterface" method="getQuoteTotals"/>
+    <route url="/V1/checkout/placeorder" method="POST">
+        <service class="AlbertMage\Checkout\Api\CheckoutManagementInterface" method="placeOrder"/>
         <resources>
             <resource ref="self" />
         </resources>
