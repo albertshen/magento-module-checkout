@@ -5,6 +5,7 @@
 namespace AlbertMage\Checkout\Model;
 
 use AlbertMage\Checkout\Api\CheckoutManagementInterface;
+use AlbertMage\Catalog\Api\ProductManagementInterface;
 use AlbertMage\Quote\Api\Data\CartInterface;
 use AlbertMage\Quote\Api\Data\CartItemInterface;
 use AlbertMage\Quote\Api\Data\CartItemInterfaceFactory;
@@ -18,7 +19,6 @@ use Magento\Quote\Api\CartRepositoryInterface as MageCartRepositoryInterface;
 use Magento\Quote\Api\Data\CartItemInterfaceFactory as MageCartItemInterfaceFactory;
 use Magento\Quote\Api\CartManagementInterfaceFactory;
 use Magento\Quote\Api\CartTotalRepositoryInterface;
-use Magento\Catalog\Model\ProductFactory;
 use Magento\Checkout\Api\Data\TotalsInformationInterface;
 use Magento\Checkout\Api\Data\TotalsInformationInterfaceFactory;
 use Magento\Quote\Api\Data\AddressInterfaceFactory;
@@ -41,6 +41,11 @@ class CheckoutManagement implements CheckoutManagementInterface
      * @var MageCartRepositoryInterface
      */
     protected $quoteRepository;
+
+    /**
+     * @var ProductManagementInterface
+     */
+    protected $productManagement;
 
     /**
      * @var CartInterface
@@ -92,11 +97,6 @@ class CheckoutManagement implements CheckoutManagementInterface
     protected $cartTotalRepository;
 
     /**
-     * @var ProductFactory
-     */
-    protected $productFactory;
-
-    /**
      * @var TotalsInformationInterfaceFactory
      */
     protected $totalsInformationInterfaceFactory;
@@ -129,6 +129,7 @@ class CheckoutManagement implements CheckoutManagementInterface
     /**
      * @param MageCartRepositoryInterface $quoteRepository
      * @param CartInterface $cart
+     * @param ProductManagementInterface $productManagement
      * @param CartRepositoryInterface $cartRepository
      * @param CartItemRepositoryInterface $cartItemRepository
      * @param CartItemInterfaceFactory $cartItemInterfaceFactory
@@ -137,7 +138,6 @@ class CheckoutManagement implements CheckoutManagementInterface
      * @param MageCartItemInterfaceFactory $mageCartItemInterfaceFactory
      * @param CartManagementInterfaceFactory $cartManagementInterfaceFactory
      * @param CartTotalRepositoryInterface $cartTotalRepository
-     * @param ProductFactory $productFactory
      * @param TotalsInformationInterfaceFactory $totalsInformationInterfaceFactory
      * @param AddressInterfaceFactory $addressInterfaceFactory
      * @param ShippingInformationManagementInterfaceFactory $shippingInformationManagementInterfaceFactory
@@ -148,6 +148,7 @@ class CheckoutManagement implements CheckoutManagementInterface
     public function __construct(
         MageCartRepositoryInterface $quoteRepository,
         CartInterface $cart,
+        ProductManagementInterface $productManagement,
         CartRepositoryInterface $cartRepository,
         CartItemRepositoryInterface $cartItemRepository,
         CartItemInterfaceFactory $cartItemInterfaceFactory,
@@ -156,7 +157,6 @@ class CheckoutManagement implements CheckoutManagementInterface
         MageCartItemInterfaceFactory $mageCartItemInterfaceFactory,
         CartManagementInterfaceFactory $cartManagementInterfaceFactory,
         CartTotalRepositoryInterface $cartTotalRepository,
-        ProductFactory $productFactory,
         TotalsInformationInterfaceFactory $totalsInformationInterfaceFactory,
         AddressInterfaceFactory $addressInterfaceFactory,
         ShippingInformationManagementInterfaceFactory $shippingInformationManagementInterfaceFactory,
@@ -166,6 +166,7 @@ class CheckoutManagement implements CheckoutManagementInterface
     ) {
         $this->quoteRepository = $quoteRepository;
         $this->cart = $cart;
+        $this->productManagement = $productManagement;
         $this->cartRepository = $cartRepository;
         $this->cartItemRepository = $cartItemRepository;
         $this->cartItemInterfaceFactory = $cartItemInterfaceFactory;
@@ -174,7 +175,6 @@ class CheckoutManagement implements CheckoutManagementInterface
         $this->mageCartItemInterfaceFactory = $mageCartItemInterfaceFactory;
         $this->cartManagementInterfaceFactory = $cartManagementInterfaceFactory;
         $this->cartTotalRepository = $cartTotalRepository;
-        $this->productFactory = $productFactory;
         $this->totalsInformationInterfaceFactory = $totalsInformationInterfaceFactory;
         $this->addressInterfaceFactory = $addressInterfaceFactory;
         $this->shippingInformationManagementInterfaceFactory = $shippingInformationManagementInterfaceFactory;
@@ -333,16 +333,15 @@ class CheckoutManagement implements CheckoutManagementInterface
      * Create TotalsItem
      * Using plugin to add extension attributes
      *
-     * @param \Magento\Catalog\Model\Product $product
+     * @param int $productId
      * @param int $qty
      * @return \AlbertMage\Quote\Api\Data\TotalsItemInterface
      */
-    public function createTotalsItemByProduct(\Magento\Catalog\Model\Product $product, $qty = 1)
+    public function createTotalsItemByProductId($productId, $qty = 1)
     {
         $totalsItem = $this->totalsItemInterfaceFactory->create();
-        $totalsItem->setName($product->getName());
-        $totalsItem->setThumbnail($product->getMediaConfig()->getBaseMediaUrl().$product->getThumbnail());
-        $totalsItem->setPrice($product->getPrice());
+        $product = $this->productManagement->createProductById($productId);
+        $totalsItem->setProduct($product);
         $totalsItem->setQty($qty);
         $totalsItem->setRowTotal($product->getPrice() * $qty);
         return $totalsItem;
@@ -393,12 +392,12 @@ class CheckoutManagement implements CheckoutManagementInterface
         $totalsItems = [];
         foreach($cartItems as $cartItem) {
             if ($cartTotalItem = $this->getCartTotalItem($cartTotal->getItems(), $cartItem)) {
-                $totalsItem = $this->createTotalsItemByProduct($cartItem->getProduct(), $cartItem->getQty());
+                $totalsItem = $this->createTotalsItemByProductId($cartItem->getProductId(), $cartItem->getQty());
                 $this->prepareTotalsItem($totalsItem, $cartTotalItem);
                 $totalsItem->setItemId($cartItem->getId());
                 $totalsItems[] = $totalsItem;
             } else {
-                $totalsItem = $this->createTotalsItemByProduct($cartItem->getProduct(), $cartItem->getQty());
+                $totalsItem = $this->createTotalsItemByProductId($cartItem->getProductId(), $cartItem->getQty());
                 $totalsItem->setIsActive(0);
                 $totalsItem->setItemId($cartItem->getId());
                 $totalsItems[] = $totalsItem;
@@ -430,8 +429,9 @@ class CheckoutManagement implements CheckoutManagementInterface
         $totalsItems = [];
         if (count($quoteItems) == 1) {
             foreach($cartTotal->getItems() as $cartTotalItem) {
-                $product = $this->productFactory->create()->load($cartTotalItem->getExtensionAttributes()->getProductId());
-                $totalsItem = $this->createTotalsItemByProduct($product, $cartTotalItem->getQty());
+                $totalsItem = $this->createTotalsItemByProductId(
+                    $cartTotalItem->getExtensionAttributes()->getProductId(), $cartTotalItem->getQty()
+                );
                 $this->prepareTotalsItem($totalsItem, $cartTotalItem);
                 $totalsItems[] = $totalsItem;
             }
@@ -440,7 +440,7 @@ class CheckoutManagement implements CheckoutManagementInterface
             $cartItems = $cart->getAllItems();
             foreach($cartItems as $cartItem) {
                 if ($cartTotalItem = $this->getCartTotalItem($cartTotal->getItems(), $cartItem)) {
-                    $totalsItem = $this->createTotalsItemByProduct($cartItem->getProduct(), $cartTotalItem->getQty());
+                    $totalsItem = $this->createTotalsItemByProductId($cartItem->getProductId(), $cartTotalItem->getQty());
                     $this->prepareTotalsItem($totalsItem, $cartTotalItem);
                     $totalsItems[] = $totalsItem;
                 }
