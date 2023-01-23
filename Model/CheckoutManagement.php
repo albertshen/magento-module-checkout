@@ -340,7 +340,7 @@ class CheckoutManagement implements CheckoutManagementInterface
     public function createTotalsItemByProductId($productId, $qty = 1)
     {
         $totalsItem = $this->totalsItemInterfaceFactory->create();
-        $product = $this->productManagement->createProductById($productId);
+        $product = $this->productManagement->createProductListItemById($productId);
         $totalsItem->setProduct($product);
         $totalsItem->setQty($qty);
         $totalsItem->setRowTotal($product->getPrice() * $qty);
