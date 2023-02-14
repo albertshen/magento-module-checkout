@@ -14,6 +14,7 @@ use AlbertMage\Quote\Api\CartItemRepositoryInterface;
 use AlbertMage\Quote\Api\Data\TotalsInterfaceFactory;
 use AlbertMage\Quote\Api\Data\TotalsItemInterfaceFactory;
 use AlbertMage\Checkout\Api\Data\ShippingAddressInterface;
+use AlbertMage\Customer\Api\Data\SocialAccountInterfaceFactory;
 use Magento\Framework\Exception\NoSuchEntityException;
 use Magento\Quote\Api\CartRepositoryInterface as MageCartRepositoryInterface;
 use Magento\Quote\Api\Data\CartItemInterfaceFactory as MageCartItemInterfaceFactory;
@@ -125,6 +126,11 @@ class CheckoutManagement implements CheckoutManagementInterface
      * @var PaymentInterfaceFactory
      */
     protected $paymentInterfaceFactory;
+
+    /**
+     * @var SocialAccountInterfaceFactory
+     */
+    protected $socialAccountInterfaceFactory;
     
     /**
      * @param MageCartRepositoryInterface $quoteRepository
@@ -144,6 +150,7 @@ class CheckoutManagement implements CheckoutManagementInterface
      * @param ShippingInformationFactory $shippingInformationFactory
      * @param PaymentInformationManagementInterfaceFactory $paymentInformationManagementInterfaceFactory
      * @param PaymentInterfaceFactory $paymentInterfaceFactory
+     * @param SocialAccountInterfaceFactory $socialAccountInterfaceFactory
      */
     public function __construct(
         MageCartRepositoryInterface $quoteRepository,
@@ -162,7 +169,8 @@ class CheckoutManagement implements CheckoutManagementInterface
         ShippingInformationManagementInterfaceFactory $shippingInformationManagementInterfaceFactory,
         ShippingInformationFactory $shippingInformationFactory,
         PaymentInformationManagementInterfaceFactory $paymentInformationManagementInterfaceFactory,
-        PaymentInterfaceFactory $paymentInterfaceFactory
+        PaymentInterfaceFactory $paymentInterfaceFactory,
+        SocialAccountInterfaceFactory $socialAccountInterfaceFactory
     ) {
         $this->quoteRepository = $quoteRepository;
         $this->cart = $cart;
@@ -181,20 +189,22 @@ class CheckoutManagement implements CheckoutManagementInterface
         $this->shippingInformationFactory = $shippingInformationFactory;
         $this->paymentInformationManagementInterfaceFactory = $paymentInformationManagementInterfaceFactory;
         $this->paymentInterfaceFactory = $paymentInterfaceFactory;
+        $this->socialAccountInterfaceFactory = $socialAccountInterfaceFactory;
     }
 
     /**
      * {@inheritdoc}
      */
-    public function getCartTotals($customerId)
+    public function getMineCartTotals($customerId)
     {
 
+        //create quote if not exist
         try {
-            $quote = $this->quoteRepository->getActiveForCustomer($customerId);
+            $this->quoteRepository->getActiveForCustomer($customerId);
         } catch (NoSuchEntityException $e) {
             $this->cartManagementInterfaceFactory->create()->createEmptyCartForCustomer($customerId);
         }
-
+        
         $cart = $this->cart->load($customerId, 'customer_id');
 
         return $this->generateCartTotals($cart);
@@ -203,25 +213,16 @@ class CheckoutManagement implements CheckoutManagementInterface
     /**
      * {@inheritdoc}
      */
-    public function updateCartTotals($customerId, $cartItems)
+    public function getGuestCartTotals($guestToken)
     {
 
-        $selectedItems = [];
+        $guest = $this->socialAccountInterfaceFactory->create()->load($guestToken, 'unique_hash');
 
-        foreach($cartItems as $cartItem) {
-            $selectedItems[] = $cartItem->getItemId();
+        if (!$guest->getId()) {
+            throw new NoSuchEntityException(__('Invalid guest token.'));
         }
 
-        $cart = $this->cart->load($customerId, 'customer_id');
-
-        foreach($cart->getAllItems() as $cartItem) {
-            if (in_array($cartItem->getId(), $selectedItems)) {
-                $cartItem->setIsActive(1);
-            } else {
-                $cartItem->setIsActive(0);
-            }
-            $this->cartItemRepository->save($cartItem);
-        }
+        $cart = $this->cart->load($guest->getOpenId(), 'guest_id');
 
         return $this->generateCartTotals($cart);
     }
@@ -229,21 +230,55 @@ class CheckoutManagement implements CheckoutManagementInterface
     /**
      * {@inheritdoc}
      */
-    public function getQuoteTotals($cartId)
+    public function updateMineCartTotals($customerId, $cartItems)
     {
-        $quote = $this->quoteRepository->getActive($cartId);
 
-        $address = $this->addressInterfaceFactory->create();
-        $address->setCountryId(self::DEFAULT_COUNTRY_ID);
-        $totalsInformation = $this->totalsInformationInterfaceFactory->create();
-        $totalsInformation->setShippingMethodCode(self::DEFAULT_DILIVERY_METHOD);
-        $totalsInformation->setShippingCarrierCode(self::DEFAULT_DILIVERY_METHOD);
-        $totalsInformation->setAddress($address);
+        $cart = $this->cart->load($customerId, 'customer_id');
 
-        $quote = $this->setAddressInformation($quote, $totalsInformation);
+        $this->updateCartTotals($cart, $cartItems);
 
-        return $this->calculateQuoteTotals($quote);
+    }
 
+    /**
+     * {@inheritdoc}
+     */
+    public function updateGuestCartTotals($guestToken, $cartItems)
+    {
+
+        $guest = $this->socialAccountInterfaceFactory->create()->load($guestToken, 'unique_hash');
+
+        if (!$guest->getId()) {
+            throw new NoSuchEntityException(__('Invalid guest token.'));
+        }
+
+        $cart = $this->cart->load($guest->getOpenId(), 'guest_id');
+
+        $this->updateCartTotals($cart, $cartItems);
+
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function getMineQuoteTotals($cartId)
+    {
+        return $this->getQuoteTotals($cartId);
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function getGuestQuoteTotals($guestToken)
+    {
+        $guest = $this->socialAccountInterfaceFactory->create()->load($guestToken, 'unique_hash');
+
+        if (!$guest->getId()) {
+            throw new NoSuchEntityException(__('Invalid guest token.'));
+        }
+
+        $cart = $this->cart->load($guest->getOpenId(), 'guest_id');
+
+        return $this->getQuoteTotals($cart->getQuoteId());
     }
 
     /**
@@ -274,7 +309,56 @@ class CheckoutManagement implements CheckoutManagementInterface
     /**
      * {@inheritdoc}
      */
-    public function placeOrder($cartId, ShippingAddressInterface $address, $paymentMethod)
+    public function minePlaceOrder($cartId, ShippingAddressInterface $address, $paymentMethod)
+    {
+        return $this->placeOrder($cartId, $address, $paymentMethod);
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function guestPlaceOrder($guestToken, ShippingAddressInterface $address, $paymentMethod)
+    {
+        $guest = $this->socialAccountInterfaceFactory->create()->load($guestToken, 'unique_hash');
+
+        if (!$guest->getId()) {
+            throw new NoSuchEntityException(__('Invalid guest token.'));
+        }
+
+        $cart = $this->cart->load($guest->getOpenId(), 'guest_id');
+
+        return $this->placeOrder($cart->getQuoteId(), $address, $paymentMethod);
+    }
+
+    /**
+     * Create TotalsItem
+     * Using plugin to add extension attributes
+     *
+     * @param int $productId
+     * @param int $qty
+     * @return \AlbertMage\Quote\Api\Data\TotalsItemInterface
+     */
+    public function createTotalsItemByProductId($productId, $qty = 1)
+    {
+        $totalsItem = $this->totalsItemInterfaceFactory->create();
+        $product = $this->productManagement->createProductListItemById($productId);
+        $totalsItem->setProduct($product);
+        $totalsItem->setPrice($product->getPrice());
+        $totalsItem->setQty($qty);
+        $totalsItem->setRowTotal($product->getPrice() * $qty);
+        return $totalsItem;
+    }
+
+    /**
+     * One step checkout
+     *
+     * @param int $cartId
+     * @param \AlbertMage\Checkout\Api\Data\ShippingAddressInterface $address
+     * @param string paymentMethod
+     * @return int Order ID.
+     * @throws \Magento\Framework\Exception\LocalizedException
+     */
+    private function placeOrder($cartId, ShippingAddressInterface $address, $paymentMethod)
     {
 
         // Save quote address
@@ -330,21 +414,26 @@ class CheckoutManagement implements CheckoutManagementInterface
     }
 
     /**
-     * Create TotalsItem
-     * Using plugin to add extension attributes
+     * Get quote totals.
      *
-     * @param int $productId
-     * @param int $qty
-     * @return \AlbertMage\Quote\Api\Data\TotalsItemInterface
+     * @param int $cartId
+     * @return \AlbertMage\Quote\Api\Data\TotalsInterface
+     * @throws \Magento\Framework\Exception\LocalizedException
      */
-    public function createTotalsItemByProductId($productId, $qty = 1)
+    public function getQuoteTotals($cartId)
     {
-        $totalsItem = $this->totalsItemInterfaceFactory->create();
-        $product = $this->productManagement->createProductListItemById($productId);
-        $totalsItem->setProduct($product);
-        $totalsItem->setQty($qty);
-        $totalsItem->setRowTotal($product->getPrice() * $qty);
-        return $totalsItem;
+        $quote = $this->quoteRepository->getActive($cartId);
+
+        $address = $this->addressInterfaceFactory->create();
+        $address->setCountryId(self::DEFAULT_COUNTRY_ID);
+        $totalsInformation = $this->totalsInformationInterfaceFactory->create();
+        $totalsInformation->setShippingMethodCode(self::DEFAULT_DILIVERY_METHOD);
+        $totalsInformation->setShippingCarrierCode(self::DEFAULT_DILIVERY_METHOD);
+        $totalsInformation->setAddress($address);
+
+        $quote = $this->setAddressInformation($quote, $totalsInformation);
+
+        return $this->calculateQuoteTotals($quote);
     }
 
     /**
@@ -371,6 +460,32 @@ class CheckoutManagement implements CheckoutManagementInterface
     }
 
     /**
+     * @param CartInterface $cart
+     * @param \AlbertMage\Checkout\Api\Data\CartItemInterface[] $cartItems
+     * @return \AlbertMage\Quote\Api\Data\TotalsInterface
+     */
+    private function updateCartTotals(CartInterface $cart, $cartItems)
+    {
+
+        $selectedItems = [];
+
+        foreach($cartItems as $cartItem) {
+            $selectedItems[] = $cartItem->getItemId();
+        }
+
+        foreach($cart->getAllItems() as $cartItem) {
+            if (in_array($cartItem->getId(), $selectedItems)) {
+                $cartItem->setIsActive(1);
+            } else {
+                $cartItem->setIsActive(0);
+            }
+            $this->cartItemRepository->save($cartItem);
+        }
+
+        return $this->generateCartTotals($cart);
+    }
+
+    /**
      * Calculate totals in carts
      *
      * @param \AlbertMage\Quote\Api\Data\CartInterface $cart
@@ -391,17 +506,14 @@ class CheckoutManagement implements CheckoutManagementInterface
         $cartItems = $cart->getAllItems();
         $totalsItems = [];
         foreach($cartItems as $cartItem) {
+            $totalsItem = $this->createTotalsItemByProductId($cartItem->getProductId(), $cartItem->getQty());
             if ($cartTotalItem = $this->getCartTotalItem($cartTotal->getItems(), $cartItem)) {
-                $totalsItem = $this->createTotalsItemByProductId($cartItem->getProductId(), $cartItem->getQty());
                 $this->prepareTotalsItem($totalsItem, $cartTotalItem);
-                $totalsItem->setItemId($cartItem->getId());
-                $totalsItems[] = $totalsItem;
             } else {
-                $totalsItem = $this->createTotalsItemByProductId($cartItem->getProductId(), $cartItem->getQty());
                 $totalsItem->setIsActive(0);
-                $totalsItem->setItemId($cartItem->getId());
-                $totalsItems[] = $totalsItem;
             }
+            $totalsItem->setItemId($cartItem->getId());
+            $totalsItems[] = $totalsItem;
         }
         $totals->setItems($totalsItems);
  
@@ -436,7 +548,7 @@ class CheckoutManagement implements CheckoutManagementInterface
                 $totalsItems[] = $totalsItem;
             }
         } else {
-            $cart = $this->cart->load($quote->getCustomerId(), 'customer_id');
+            $cart = $this->cart->load($quote->getId(), 'quote_id');
             $cartItems = $cart->getAllItems();
             foreach($cartItems as $cartItem) {
                 if ($cartTotalItem = $this->getCartTotalItem($cartTotal->getItems(), $cartItem)) {
@@ -492,8 +604,20 @@ class CheckoutManagement implements CheckoutManagementInterface
      */
     private function syncCartAndQuoteItems(\AlbertMage\Quote\Api\Data\CartInterface $cart)
     {
-        $quote = $this->quoteRepository->getActiveForCustomer($cart->getCustomerId());
+        //create quote if not exist
+        $quoteId = $cart->getQuoteId();
+        if ($quoteId == 0) {
+            if ($cart->getCustomerId()) {
+                $quoteId =  $this->cartManagementInterfaceFactory->create()->createEmptyCartForCustomer($cart->getCustomerId());
+            } else {
+                $quoteId = $this->cartManagementInterfaceFactory->create()->createEmptyCart();
+            }
+            $cart->setQuoteId($quoteId);
+            $this->cartRepository->save($cart);
+        }
 
+        $quote = $this->quoteRepository->getActive($quoteId);
+        
         $quoteItems = $quote->getItems();
 
         foreach($quoteItems as $quoteItem) {
@@ -517,7 +641,7 @@ class CheckoutManagement implements CheckoutManagementInterface
         $quote->setItems($quoteItems);
         $this->quoteRepository->save($quote);
 
-        return $this->quoteRepository->getActiveForCustomer($cart->getCustomerId());
+        return $this->quoteRepository->getActive($cart->getQuoteId());
     }
 
     /**

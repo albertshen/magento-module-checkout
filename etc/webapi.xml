@@ -1,16 +1,22 @@
 <?xml version="1.0" ?>
 <routes xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Webapi:etc/webapi.xsd">
     <route url="/V2/carts/mine/totals" method="GET">
-        <service class="AlbertMage\Checkout\Api\CheckoutManagementInterface" method="getCartTotals"/>
+        <service class="AlbertMage\Checkout\Api\CheckoutManagementInterface" method="getMineCartTotals"/>
         <resources>
             <resource ref="self" />
         </resources>
         <data>
             <parameter name="customerId" force="true">%customer_id%</parameter>
         </data>
+    </route>
+    <route url="/V2/carts/guest/totals" method="GET">
+        <service class="AlbertMage\Checkout\Api\CheckoutManagementInterface" method="getGuestCartTotals"/>
+        <resources>
+            <resource ref="anonymous" />
+        </resources>
     </route>
     <route url="/V2/carts/mine/totals" method="POST">
-        <service class="AlbertMage\Checkout\Api\CheckoutManagementInterface" method="updateCartTotals"/>
+        <service class="AlbertMage\Checkout\Api\CheckoutManagementInterface" method="updateMineCartTotals"/>
         <resources>
             <resource ref="self" />
         </resources>
@@ -18,14 +24,26 @@
             <parameter name="customerId" force="true">%customer_id%</parameter>
         </data>
     </route>
+    <route url="/V2/carts/guest/totals" method="POST">
+        <service class="AlbertMage\Checkout\Api\CheckoutManagementInterface" method="updateGuestCartTotals"/>
+        <resources>
+            <resource ref="anonymous" />
+        </resources>
+    </route>
     <route url="/V1/checkout/quote/totals" method="GET">
-        <service class="AlbertMage\Checkout\Api\CheckoutManagementInterface" method="getQuoteTotals"/>
+        <service class="AlbertMage\Checkout\Api\CheckoutManagementInterface" method="getMineQuoteTotals"/>
         <resources>
             <resource ref="self" />
         </resources>
         <data>
             <parameter name="cartId" force="true">%cart_id%</parameter>
         </data>
+    </route>
+    <route url="/V1/checkout/guest/quote/totals" method="GET">
+        <service class="AlbertMage\Checkout\Api\CheckoutManagementInterface" method="getGuestQuoteTotals"/>
+        <resources>
+            <resource ref="anonymous" />
+        </resources>
     </route>
     <route url="/V1/checkout/one-step" method="POST">
         <service class="AlbertMage\Checkout\Api\CheckoutManagementInterface" method="oneStepCheckout"/>
@@ -37,12 +55,18 @@
         </data>
     </route>
     <route url="/V1/checkout/placeorder" method="POST">
-        <service class="AlbertMage\Checkout\Api\CheckoutManagementInterface" method="placeOrder"/>
+        <service class="AlbertMage\Checkout\Api\CheckoutManagementInterface" method="minePlaceOrder"/>
         <resources>
             <resource ref="self" />
         </resources>
         <data>
             <parameter name="cartId" force="true">%cart_id%</parameter>
         </data>
+    </route>
+    <route url="/V1/checkout/guest/placeorder" method="POST">
+        <service class="AlbertMage\Checkout\Api\CheckoutManagementInterface" method="guestPlaceOrder"/>
+        <resources>
+            <resource ref="anonymous" />
+        </resources>
     </route>
 </routes>

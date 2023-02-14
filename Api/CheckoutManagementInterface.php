@@ -20,35 +20,64 @@ interface CheckoutManagementInterface
     const DEFAULT_POST_CODE = '000000';
 
     /**
-     * Get cart totals.
+     * Get mine cart totals.
      *
      * @param int $customerId
      * @return \AlbertMage\Quote\Api\Data\TotalsInterface
      * @throws \Magento\Framework\Exception\LocalizedException
      */
-    public function getCartTotals($customerId);
+    public function getMineCartTotals($customerId);
 
     /**
-     * Update cart totals.
+     * Get guest cart totals.
+     *
+     * @param string $guestToken
+     * @return \AlbertMage\Quote\Api\Data\TotalsInterface
+     * @throws \Magento\Framework\Exception\LocalizedException
+     * @throws \Magento\Framework\Exception\NoSuchEntityException
+     */
+    public function getGuestCartTotals($guestToken);
+
+    /**
+     * Update mine cart totals.
      *
      * @param int $customerId
      * @param \AlbertMage\Checkout\Api\Data\CartItemInterface[] $cartItems
      * @return \AlbertMage\Quote\Api\Data\TotalsInterface
      * @throws \Magento\Framework\Exception\LocalizedException
      */
-    public function updateCartTotals($customerId, $cartItems);
+    public function updateMineCartTotals($customerId, $cartItems);
 
     /**
-     * Get quote totals.
+     * Update guest cart totals.
+     *
+     * @param string $guestToken
+     * @param \AlbertMage\Checkout\Api\Data\CartItemInterface[] $cartItems
+     * @return \AlbertMage\Quote\Api\Data\TotalsInterface
+     * @throws \Magento\Framework\Exception\LocalizedException
+     */
+    public function updateGuestCartTotals($guestToken, $cartItems);
+
+    /**
+     * Get mine quote totals.
      *
      * @param int $cartId
      * @return \AlbertMage\Quote\Api\Data\TotalsInterface
      * @throws \Magento\Framework\Exception\LocalizedException
      */
-    public function getQuoteTotals($cartId);
+    public function getMineQuoteTotals($cartId);
 
     /**
-     * One step checkout
+     * Get guest quote totals.
+     *
+     * @param string $guestToken
+     * @return \AlbertMage\Quote\Api\Data\TotalsInterface
+     * @throws \Magento\Framework\Exception\LocalizedException
+     */
+    public function getGuestQuoteTotals($guestToken);
+
+    /**
+     * Place Order
      *
      * @param int $cartId
      * @param \AlbertMage\Checkout\Api\Data\ShippingAddressInterface $address
@@ -56,7 +85,18 @@ interface CheckoutManagementInterface
      * @return int Order ID.
      * @throws \Magento\Framework\Exception\LocalizedException
      */
-    public function placeOrder($cartId, ShippingAddressInterface $address, $paymentMethod);
+    public function minePlaceOrder($cartId, ShippingAddressInterface $address, $paymentMethod);
+
+    /**
+     * Place Order
+     *
+     * @param string $guestToken
+     * @param \AlbertMage\Checkout\Api\Data\ShippingAddressInterface $address
+     * @param string paymentMethod
+     * @return int Order ID.
+     * @throws \Magento\Framework\Exception\LocalizedException
+     */
+    public function guestPlaceOrder($guestToken, ShippingAddressInterface $address, $paymentMethod);
 
     /**
      * One Step Checkout
