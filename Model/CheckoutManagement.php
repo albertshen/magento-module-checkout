@@ -262,7 +262,7 @@ class CheckoutManagement implements CheckoutManagementInterface
      */
     public function getMineQuoteTotals($cartId)
     {
-        return $this->getQuoteTotals($cartId);
+        return $this->generateQuoteTotals($cartId);
     }
 
     /**
@@ -278,7 +278,7 @@ class CheckoutManagement implements CheckoutManagementInterface
 
         $cart = $this->cart->load($guest->getOpenId(), 'guest_id');
 
-        return $this->getQuoteTotals($cart->getQuoteId());
+        return $this->generateQuoteTotals($cart->getQuoteId());
     }
 
     /**
@@ -414,13 +414,13 @@ class CheckoutManagement implements CheckoutManagementInterface
     }
 
     /**
-     * Get quote totals.
+     * Generate quote totals.
      *
      * @param int $cartId
      * @return \AlbertMage\Quote\Api\Data\TotalsInterface
      * @throws \Magento\Framework\Exception\LocalizedException
      */
-    public function getQuoteTotals($cartId)
+    private function generateQuoteTotals($cartId)
     {
         $quote = $this->quoteRepository->getActive($cartId);
 
@@ -437,7 +437,7 @@ class CheckoutManagement implements CheckoutManagementInterface
     }
 
     /**
-     * Calulate Cart Totals
+     * Generate Cart Totals
      *
      * @param \AlbertMage\Quote\Api\Data\CartInterface $cart
      * @return \AlbertMage\Quote\Api\Data\TotalsInterface
@@ -509,6 +509,7 @@ class CheckoutManagement implements CheckoutManagementInterface
             $totalsItem = $this->createTotalsItemByProductId($cartItem->getProductId(), $cartItem->getQty());
             if ($cartTotalItem = $this->getCartTotalItem($cartTotal->getItems(), $cartItem)) {
                 $this->prepareTotalsItem($totalsItem, $cartTotalItem);
+                $totalsItem->setIsActive(1);
             } else {
                 $totalsItem->setIsActive(0);
             }
@@ -591,7 +592,6 @@ class CheckoutManagement implements CheckoutManagementInterface
      */
     private function prepareTotalsItem(\AlbertMage\Quote\Api\Data\TotalsItemInterface $totalsItem, \Magento\Quote\Api\Data\TotalsItemInterface $cartTotalItem)
     {
-        $totalsItem->setIsActive(1);
         $totalsItem->setDiscountAmount($cartTotalItem->getDiscountAmount());
         return $this;
     }
