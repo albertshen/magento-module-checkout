@@ -5,10 +5,8 @@
 namespace AlbertMage\Checkout\Model;
 
 use AlbertMage\Checkout\Api\CheckoutManagementInterface;
-use AlbertMage\Catalog\Api\ProductManagementInterface;
 use AlbertMage\Quote\Api\Data\CartInterface;
 use AlbertMage\Quote\Api\Data\CartItemInterface;
-use AlbertMage\Quote\Api\Data\CartItemInterfaceFactory;
 use AlbertMage\Quote\Api\CartRepositoryInterface;
 use AlbertMage\Quote\Api\CartItemRepositoryInterface;
 use AlbertMage\Quote\Api\Data\TotalsInterfaceFactory;
@@ -27,7 +25,7 @@ use Magento\Checkout\Api\ShippingInformationManagementInterfaceFactory;
 use Magento\Checkout\Model\ShippingInformationFactory;
 use Magento\Checkout\Api\PaymentInformationManagementInterfaceFactory;
 use Magento\Quote\Api\Data\PaymentInterfaceFactory;
-
+use AlbertMage\Quote\Model\TotalsManagement;
 
 /**
  * Class CheckoutManagement
@@ -42,11 +40,6 @@ class CheckoutManagement implements CheckoutManagementInterface
      * @var MageCartRepositoryInterface
      */
     protected $quoteRepository;
-
-    /**
-     * @var ProductManagementInterface
-     */
-    protected $productManagement;
 
     /**
      * @var CartInterface
@@ -66,11 +59,6 @@ class CheckoutManagement implements CheckoutManagementInterface
      * @var CartItemRepositoryInterface
      */
     protected $cartItemRepository;
-
-    /**
-     * @var CartItemInterfaceFactory
-     */
-    protected $cartItemInterfaceFactory;
 
     /**
      * @var TotalsInterfaceFactory
@@ -131,14 +119,17 @@ class CheckoutManagement implements CheckoutManagementInterface
      * @var SocialAccountInterfaceFactory
      */
     protected $socialAccountInterfaceFactory;
+
+    /**
+     * @var TotalsManagement
+     */
+    protected $totalsManagement;
     
     /**
      * @param MageCartRepositoryInterface $quoteRepository
      * @param CartInterface $cart
-     * @param ProductManagementInterface $productManagement
      * @param CartRepositoryInterface $cartRepository
      * @param CartItemRepositoryInterface $cartItemRepository
-     * @param CartItemInterfaceFactory $cartItemInterfaceFactory
      * @param TotalsInterfaceFactory $totalsInterfaceFactory
      * @param TotalsItemInterfaceFactory $totalsItemInterfaceFactory
      * @param MageCartItemInterfaceFactory $mageCartItemInterfaceFactory
@@ -151,14 +142,13 @@ class CheckoutManagement implements CheckoutManagementInterface
      * @param PaymentInformationManagementInterfaceFactory $paymentInformationManagementInterfaceFactory
      * @param PaymentInterfaceFactory $paymentInterfaceFactory
      * @param SocialAccountInterfaceFactory $socialAccountInterfaceFactory
+     * @param TotalsManagement $totalsManagement
      */
     public function __construct(
         MageCartRepositoryInterface $quoteRepository,
         CartInterface $cart,
-        ProductManagementInterface $productManagement,
         CartRepositoryInterface $cartRepository,
         CartItemRepositoryInterface $cartItemRepository,
-        CartItemInterfaceFactory $cartItemInterfaceFactory,
         TotalsInterfaceFactory $totalsInterfaceFactory,
         TotalsItemInterfaceFactory $totalsItemInterfaceFactory,
         MageCartItemInterfaceFactory $mageCartItemInterfaceFactory,
@@ -170,14 +160,13 @@ class CheckoutManagement implements CheckoutManagementInterface
         ShippingInformationFactory $shippingInformationFactory,
         PaymentInformationManagementInterfaceFactory $paymentInformationManagementInterfaceFactory,
         PaymentInterfaceFactory $paymentInterfaceFactory,
-        SocialAccountInterfaceFactory $socialAccountInterfaceFactory
+        SocialAccountInterfaceFactory $socialAccountInterfaceFactory,
+        TotalsManagement $totalsManagement
     ) {
         $this->quoteRepository = $quoteRepository;
         $this->cart = $cart;
-        $this->productManagement = $productManagement;
         $this->cartRepository = $cartRepository;
         $this->cartItemRepository = $cartItemRepository;
-        $this->cartItemInterfaceFactory = $cartItemInterfaceFactory;
         $this->totalsInterfaceFactory = $totalsInterfaceFactory;
         $this->totalsItemInterfaceFactory = $totalsItemInterfaceFactory;
         $this->mageCartItemInterfaceFactory = $mageCartItemInterfaceFactory;
@@ -190,6 +179,7 @@ class CheckoutManagement implements CheckoutManagementInterface
         $this->paymentInformationManagementInterfaceFactory = $paymentInformationManagementInterfaceFactory;
         $this->paymentInterfaceFactory = $paymentInterfaceFactory;
         $this->socialAccountInterfaceFactory = $socialAccountInterfaceFactory;
+        $this->totalsManagement = $totalsManagement;
     }
 
     /**
@@ -303,7 +293,6 @@ class CheckoutManagement implements CheckoutManagementInterface
         $this->quoteRepository->save($quote);
 
         return true;
-
     }
 
     /**
@@ -331,26 +320,7 @@ class CheckoutManagement implements CheckoutManagementInterface
     }
 
     /**
-     * Create TotalsItem
-     * Using plugin to add extension attributes
-     *
-     * @param int $productId
-     * @param int $qty
-     * @return \AlbertMage\Quote\Api\Data\TotalsItemInterface
-     */
-    public function createTotalsItemByProductId($productId, $qty = 1)
-    {
-        $totalsItem = $this->totalsItemInterfaceFactory->create();
-        $product = $this->productManagement->getProductListItemById($productId);
-        $totalsItem->setProduct($product);
-        $totalsItem->setPrice($product->getPrice());
-        $totalsItem->setQty($qty);
-        $totalsItem->setRowTotal($product->getPrice() * $qty);
-        return $totalsItem;
-    }
-
-    /**
-     * One step checkout
+     * Place an order
      *
      * @param int $cartId
      * @param \AlbertMage\Checkout\Api\Data\ShippingAddressInterface $address
@@ -362,45 +332,7 @@ class CheckoutManagement implements CheckoutManagementInterface
     {
 
         // Save quote address
-        $shippingAddress = $this->addressInterfaceFactory->create();
-        $billingAddress = $this->addressInterfaceFactory->create();
-
-        $shippingAddress->setRegion($address->getRegion());
-        $shippingAddress->setRegionId($address->getRegionId());
-        $shippingAddress->setDistrict($address->getDistrict());
-        $shippingAddress->setDistrictId($address->getDistrictId());
-        $shippingAddress->setCity($address->getCity());
-        $shippingAddress->setCityId($address->getCityId());
-        $shippingAddress->setStreet([$address->getStreet()]);
-        $shippingAddress->setCountryId(self::DEFAULT_COUNTRY_ID);
-        $shippingAddress->setPostcode(self::DEFAULT_POST_CODE);
-        $shippingAddress->setFirstname($address->getFirstname());
-        $shippingAddress->setLastname($address->getLastname());
-        $shippingAddress->setEmail($address->getEmail());
-        $shippingAddress->setTelephone($address->getTelephone());
-
-        $billingAddress->setRegion($address->getRegion());
-        $billingAddress->setRegionId($address->getRegionId());
-        $billingAddress->setDistrict($address->getDistrict());
-        $billingAddress->setDistrictId($address->getDistrictId());
-        $billingAddress->setCity($address->getCity());
-        $billingAddress->setCityId($address->getCityId());
-        $billingAddress->setStreet([$address->getStreet()]);
-        $billingAddress->setCountryId(self::DEFAULT_COUNTRY_ID);
-        $billingAddress->setPostcode(self::DEFAULT_POST_CODE);
-        $billingAddress->setFirstname($address->getFirstname());
-        $billingAddress->setLastname($address->getLastname());
-        $billingAddress->setEmail($address->getEmail());
-        $billingAddress->setTelephone($address->getTelephone());
-
-        $shippingInformation = $this->shippingInformationFactory->create();
-        $shippingInformation->setShippingAddress($shippingAddress);
-        $shippingInformation->setBillingAddress($billingAddress);
-        $shippingInformation->setShippingCarrierCode(self::DEFAULT_DILIVERY_METHOD);
-        $shippingInformation->setShippingMethodCode(self::DEFAULT_DILIVERY_METHOD);
-
-        $this->shippingInformationManagementInterfaceFactory->create()->saveAddressInformation($cartId, $shippingInformation);
-
+        $this->saveAddressInformation($cartId, $address);
 
         //Set payment method and place order
         $paymentInformationManagement = $this->paymentInformationManagementInterfaceFactory->create();
@@ -433,7 +365,7 @@ class CheckoutManagement implements CheckoutManagementInterface
 
         $quote = $this->setAddressInformation($quote, $totalsInformation);
 
-        return $this->calculateQuoteTotals($quote);
+        return $this->calculateQuoteTotalsByCartSort($quote);
     }
 
     /**
@@ -499,25 +431,42 @@ class CheckoutManagement implements CheckoutManagementInterface
 
         $cartTotal = $this->cartTotalRepository->get($quote->getId());
 
-        $totals = $this->totalsInterfaceFactory->create();
-
-        $this->prepareTotals($totals, $cartTotal);
-  
-        $cartItems = $cart->getAllItems();
-        $totalsItems = [];
-        foreach($cartItems as $cartItem) {
-            $totalsItem = $this->createTotalsItemByProductId($cartItem->getProductId(), $cartItem->getQty());
-            if ($cartTotalItem = $this->getCartTotalItem($cartTotal->getItems(), $cartItem)) {
-                $this->prepareTotalsItem($totalsItem, $cartTotalItem);
-                $totalsItem->setIsActive(1);
-            } else {
-                $totalsItem->setIsActive(0);
-            }
-            $totalsItem->setItemId($cartItem->getId());
-            $totalsItems[] = $totalsItem;
-        }
-        $totals->setItems($totalsItems);
+        $totals = $this->totalsManagement->mergeTotalsItemsToCart($cartTotal, $cart);
  
+        return $totals;
+    }
+
+    /**
+     * Calculate totals for one quote item
+     *
+     * @param \Magento\Quote\Api\Data\CartInterface $quote
+     * @return \AlbertMage\Quote\Api\Data\TotalsInterface
+     */
+    private function calculateQuoteTotalsByCartSort(
+        \Magento\Quote\Api\Data\CartInterface $quote,
+    ) {
+
+        $cart = $this->cart->load($quote->getId(), 'quote_id');
+
+        $sortIds = [];
+        foreach($cart->getAvailableItems() as $cartItem) {
+            $sortIds[] = $cartItem->getProductId();
+        }
+
+        $totals = $this->calculateQuoteTotals($quote);
+        $oldItems = $totals->getItems();
+        $newItems = [];
+
+        foreach ($totals->getItems() as $item) {
+            $oldItems[$item->getProduct()->getId()] = $item;
+        }
+
+        foreach ($sortIds as $productId) {
+            $newItems[] = $oldItems[$productId];
+        }
+
+        $totals->setItems($newItems);
+   
         return $totals;
     }
 
@@ -533,67 +482,9 @@ class CheckoutManagement implements CheckoutManagementInterface
 
         $cartTotal = $this->cartTotalRepository->get($quote->getId());
 
-        $quoteItems = $quote->getItems();
-       
-        $totals = $this->totalsInterfaceFactory->create();
+        $totals = $this->totalsManagement->getTotals($cartTotal);
 
-        $this->prepareTotals($totals, $cartTotal);
-
-        $totalsItems = [];
-        if (count($quoteItems) == 1) {
-            foreach($cartTotal->getItems() as $cartTotalItem) {
-                $totalsItem = $this->createTotalsItemByProductId(
-                    $cartTotalItem->getExtensionAttributes()->getProductId(), $cartTotalItem->getQty()
-                );
-                $this->prepareTotalsItem($totalsItem, $cartTotalItem);
-                $totalsItems[] = $totalsItem;
-            }
-        } else {
-            $cart = $this->cart->load($quote->getId(), 'quote_id');
-            $cartItems = $cart->getAllItems();
-            foreach($cartItems as $cartItem) {
-                if ($cartTotalItem = $this->getCartTotalItem($cartTotal->getItems(), $cartItem)) {
-                    $totalsItem = $this->createTotalsItemByProductId($cartItem->getProductId(), $cartTotalItem->getQty());
-                    $this->prepareTotalsItem($totalsItem, $cartTotalItem);
-                    $totalsItems[] = $totalsItem;
-                }
-            }
-        }
-
-        $totals->setItems($totalsItems);
-   
         return $totals;
-    }
-
-    /**
-     * Prepare totals
-     *
-     * @param \AlbertMage\Quote\Api\Data\TotalsInterface $totals
-     * @param \Magento\Quote\Api\Data\TotalsInterface $cartTotal
-     * @return $this
-     */
-    private function prepareTotals(\AlbertMage\Quote\Api\Data\TotalsInterface $totals, \Magento\Quote\Api\Data\TotalsInterface $cartTotal)
-    {
-        $totals->setGrandTotal($cartTotal->getGrandTotal());
-        $totals->setSubtotal($cartTotal->getSubtotal());
-        $totals->setDiscountAmount($cartTotal->getDiscountAmount());
-        $totals->setSubtotalWithDiscount($cartTotal->getSubtotalWithDiscount());
-        $totals->setShippingAmount($cartTotal->getShippingAmount());
-        $totals->setItemsQty($cartTotal->getItemsQty());
-        return $this;
-    }
-
-    /**
-     * Prepare totals item
-     *
-     * @param \AlbertMage\Quote\Api\Data\TotalsItemInterface $totalsItem
-     * @param \Magento\Quote\Api\Data\TotalsItemInterface $cartTotalItem
-     * @return $this
-     */
-    private function prepareTotalsItem(\AlbertMage\Quote\Api\Data\TotalsItemInterface $totalsItem, \Magento\Quote\Api\Data\TotalsItemInterface $cartTotalItem)
-    {
-        $totalsItem->setDiscountAmount($cartTotalItem->getDiscountAmount());
-        return $this;
     }
 
     /**
@@ -604,11 +495,35 @@ class CheckoutManagement implements CheckoutManagementInterface
      */
     private function syncCartAndQuoteItems(\AlbertMage\Quote\Api\Data\CartInterface $cart)
     {
-        //create quote if not exist
+
+        $quote = $this->getQuoteFromCart($cart);
+        
+        $quoteItems = [];
+        foreach($cart->getAvailableItems() as $cartItem) {
+            $quoteItem = $this->mageCartItemInterfaceFactory->create();
+            $quoteItem->setProductId($cartItem->getProductId());
+            $quoteItem->setSku($cartItem->getSku());
+            $quoteItem->setQty($cartItem->getQty());
+            $quoteItems[] = $quoteItem;
+        }
+
+        $this->syncQuoteItems($quote, $quoteItems);
+
+        return $this->quoteRepository->getActive($cart->getQuoteId());
+    }
+
+    /**
+     * Get Quote Item from cart
+     *
+     * @param \AlbertMage\Quote\Api\Data\CartInterface $cart
+     * @return \Magento\Quote\Api\Data\CartInterface
+     */
+    private function getQuoteFromCart(\AlbertMage\Quote\Api\Data\CartInterface $cart)
+    {
         $quoteId = $cart->getQuoteId();
         if ($quoteId == 0) {
             if ($cart->getCustomerId()) {
-                $quoteId =  $this->cartManagementInterfaceFactory->create()->createEmptyCartForCustomer($cart->getCustomerId());
+                $quoteId = $this->cartManagementInterfaceFactory->create()->createEmptyCartForCustomer($cart->getCustomerId());
             } else {
                 $quoteId = $this->cartManagementInterfaceFactory->create()->createEmptyCart();
             }
@@ -616,83 +531,108 @@ class CheckoutManagement implements CheckoutManagementInterface
             $this->cartRepository->save($cart);
         }
 
-        $quote = $this->quoteRepository->getActive($quoteId);
-        
-        $quoteItems = $quote->getItems();
+        return $this->quoteRepository->getActive($quoteId);
+    }
+
+    /**
+     * Sync Quote Item
+     * 
+     * @param \Magento\Quote\Api\Data\CartInterface $quote
+     * @param array $quoteItems
+     * @return \Magento\Quote\Api\Data\CartInterface
+     */
+    private function syncQuoteItems(\Magento\Quote\Api\Data\CartInterface $quote, $quoteItems)
+    {
+
+        $newQuoteItems = [];
+
+        $oldQuoteItems = [];
 
         foreach($quoteItems as $quoteItem) {
-            $cartItem = $this->getCartItem($cart->getAvailableItems(), $quoteItem);
-            if (!$cartItem) {
-                $quote->removeItem($quoteItem->getId());
-            }
+            $newQuoteItems[$quoteItem->getProductId()] = $quoteItem;
         }
 
-        foreach($cart->getAvailableItems() as $cartItem) {
-            if ($quoteItem = $this->getQuoteItem($quoteItems, $cartItem)) {
-                $quoteItem->setQty($cartItem->getQty());
-            } else {
-                $quoteItem = $this->mageCartItemInterfaceFactory->create();
-                $quoteItem->setSku($cartItem->getSku());
-                $quoteItem->setQty($cartItem->getQty());
-                $quoteItems[] = $quoteItem;
-            }
+        foreach($quote->getItems() as $quoteItem) {
+            $oldQuoteItems[$quoteItem->getProductId()] = $quoteItem;
+        }
+
+        $updateItems = array_intersect_key($oldQuoteItems, $newQuoteItems);
+
+        $createItems = array_diff_key($newQuoteItems, $oldQuoteItems);
+
+        $deleteItems = array_diff_key($oldQuoteItems, $newQuoteItems);
+
+        $quoteItems = [];
+
+        foreach($deleteItems as $item) {
+            $quote->removeItem($item->getId());
+        }
+
+        foreach($updateItems as $item) {
+            $item->setQty($newQuoteItems[$item->getProductId()]->getQty());
+        }
+
+
+        foreach($createItems as $item) {
+            $quoteItems[] = $item;
         }
 
         $quote->setItems($quoteItems);
+
         $this->quoteRepository->save($quote);
 
-        return $this->quoteRepository->getActive($cart->getQuoteId());
+        return $quote;
+
     }
 
+    
     /**
-     * Get Quote Item
+     * Save the address information before place an order.
      *
-     * @param array $quoteItems
-     * @param \AlbertMage\Quote\Api\Data\CartItemInterface $cartItem
-     * @return \Magento\Quote\Api\Data\CartItemInterface|null
+     * @param int $cartId
+     * @param \AlbertMage\Checkout\Api\Data\ShippingAddressInterface $address
+     * @return \Magento\Quote\Api\Data\CartInterface
      */
-    private function getQuoteItem($quoteItems, \AlbertMage\Quote\Api\Data\CartItemInterface $cartItem)
+    private function saveAddressInformation($quote, ShippingAddressInterface $address)
     {
-        foreach($quoteItems as $quoteItem) {
-            if ($quoteItem->getProductId() == $cartItem->getProductId()) {
-                return $quoteItem;
-            }
-        }
-        return null;
-    }
+        $shippingAddress = $this->addressInterfaceFactory->create();
+        $billingAddress = $this->addressInterfaceFactory->create();
 
-    /**
-     * Get Cart Item
-     *
-     * @param array $cartItems
-     * @param \Magento\Quote\Api\Data\CartItemInterface $quoteItem
-     * @return \AlbertMage\Quote\Api\Data\CartItemInterface|null
-     */
-    private function getCartItem($cartItems, \Magento\Quote\Api\Data\CartItemInterface $quoteItem)
-    {
-        foreach($cartItems as $cartItem) {
-            if ($cartItem->getProductId() == $quoteItem->getProductId()) {
-                return $cartItem;
-            }
-        }
-        return null;
-    }
+        $shippingAddress->setRegion($address->getRegion());
+        $shippingAddress->setRegionId($address->getRegionId());
+        $shippingAddress->setDistrict($address->getDistrict());
+        $shippingAddress->setDistrictId($address->getDistrictId());
+        $shippingAddress->setCity($address->getCity());
+        $shippingAddress->setCityId($address->getCityId());
+        $shippingAddress->setStreet([$address->getStreet()]);
+        $shippingAddress->setCountryId(self::DEFAULT_COUNTRY_ID);
+        $shippingAddress->setPostcode(self::DEFAULT_POST_CODE);
+        $shippingAddress->setFirstname($address->getFirstname());
+        $shippingAddress->setLastname($address->getLastname());
+        $shippingAddress->setEmail($address->getEmail());
+        $shippingAddress->setTelephone($address->getTelephone());
 
-    /**
-     * Get Cart total Item
-     *
-     * @param array $cartTotalItems
-     * @param \AlbertMage\Quote\Api\Data\CartItemInterface $cartItem
-     * @return \Magento\Quote\Api\Data\TotalsItemInterface|null
-     */
-    private function getCartTotalItem($cartTotalItems, \AlbertMage\Quote\Api\Data\CartItemInterface $cartItem)
-    {
-        foreach($cartTotalItems as $cartTotalItem) {
-            if ($cartTotalItem->getExtensionAttributes()->getProductId() == $cartItem->getProductId()) {
-                return $cartTotalItem;
-            }
-        }
-        return null;
+        $billingAddress->setRegion($address->getRegion());
+        $billingAddress->setRegionId($address->getRegionId());
+        $billingAddress->setDistrict($address->getDistrict());
+        $billingAddress->setDistrictId($address->getDistrictId());
+        $billingAddress->setCity($address->getCity());
+        $billingAddress->setCityId($address->getCityId());
+        $billingAddress->setStreet([$address->getStreet()]);
+        $billingAddress->setCountryId(self::DEFAULT_COUNTRY_ID);
+        $billingAddress->setPostcode(self::DEFAULT_POST_CODE);
+        $billingAddress->setFirstname($address->getFirstname());
+        $billingAddress->setLastname($address->getLastname());
+        $billingAddress->setEmail($address->getEmail());
+        $billingAddress->setTelephone($address->getTelephone());
+
+        $shippingInformation = $this->shippingInformationFactory->create();
+        $shippingInformation->setShippingAddress($shippingAddress);
+        $shippingInformation->setBillingAddress($billingAddress);
+        $shippingInformation->setShippingCarrierCode(self::DEFAULT_DILIVERY_METHOD);
+        $shippingInformation->setShippingMethodCode(self::DEFAULT_DILIVERY_METHOD);
+
+        $this->shippingInformationManagementInterfaceFactory->create()->saveAddressInformation($cartId, $shippingInformation);
     }
 
     /**
