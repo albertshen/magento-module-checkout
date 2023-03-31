@@ -462,7 +462,9 @@ class CheckoutManagement implements CheckoutManagementInterface
         }
 
         foreach ($sortIds as $productId) {
-            $newItems[] = $oldItems[$productId];
+            if (isset($oldItems[$productId])) {
+                $newItems[] = $oldItems[$productId];
+            }
         }
 
         $totals->setItems($newItems);
