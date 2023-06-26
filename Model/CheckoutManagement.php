@@ -387,7 +387,8 @@ class CheckoutManagement implements CheckoutManagementInterface
 
         $quote = $this->setAddressInformation($quote, $totalsInformation);
 
-        return $this->calculateCartTotals($cart, $quote);
+        return $this->calculateQuoteTotalsByCartSort($quote);
+        //return $this->calculateCartTotals($cart, $quote);
 
     }
 
@@ -411,7 +412,7 @@ class CheckoutManagement implements CheckoutManagementInterface
             } else {
                 $cartItem->setIsActive(0);
             }
-            $this->cartItemRepository->save($cartItem);
+            $cartItem->save();
         }
 
         return $this->generateCartTotals($cart);
@@ -449,7 +450,7 @@ class CheckoutManagement implements CheckoutManagementInterface
         $cart = $this->cart->load($quote->getId(), 'quote_id');
 
         $sortIds = [];
-        foreach($cart->getAvailableItems() as $cartItem) {
+        foreach($cart->getSelectedItems() as $cartItem) {
             $sortIds[] = $cartItem->getProductId();
         }
 
@@ -499,9 +500,9 @@ class CheckoutManagement implements CheckoutManagementInterface
     {
 
         $quote = $this->getQuoteFromCart($cart);
-        
+
         $quoteItems = [];
-        foreach($cart->getAvailableItems() as $cartItem) {
+        foreach($cart->getSelectedItems() as $cartItem) {
             $quoteItem = $this->mageCartItemInterfaceFactory->create();
             $quoteItem->setProductId($cartItem->getProductId());
             $quoteItem->setSku($cartItem->getSku());
@@ -530,7 +531,7 @@ class CheckoutManagement implements CheckoutManagementInterface
                 $quoteId = $this->cartManagementInterfaceFactory->create()->createEmptyCart();
             }
             $cart->setQuoteId($quoteId);
-            $this->cartRepository->save($cart);
+            $cart->save();
         }
 
         return $this->quoteRepository->getActive($quoteId);
@@ -540,7 +541,7 @@ class CheckoutManagement implements CheckoutManagementInterface
      * Sync Quote Item
      * 
      * @param \Magento\Quote\Api\Data\CartInterface $quote
-     * @param array $quoteItems
+     * @param \Magento\Quote\Api\Data\CartItemInterface[] $quoteItems
      * @return \Magento\Quote\Api\Data\CartInterface
      */
     private function syncQuoteItems(\Magento\Quote\Api\Data\CartInterface $quote, $quoteItems)
@@ -573,7 +574,6 @@ class CheckoutManagement implements CheckoutManagementInterface
         foreach($updateItems as $item) {
             $item->setQty($newQuoteItems[$item->getProductId()]->getQty());
         }
-
 
         foreach($createItems as $item) {
             $quoteItems[] = $item;
