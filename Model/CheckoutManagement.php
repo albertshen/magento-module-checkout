@@ -14,6 +14,7 @@ use AlbertMage\Quote\Api\Data\TotalsItemInterfaceFactory;
 use AlbertMage\Checkout\Api\Data\ShippingAddressInterface;
 use AlbertMage\Customer\Api\Data\SocialAccountInterfaceFactory;
 use Magento\Framework\Exception\NoSuchEntityException;
+use Magento\Framework\Exception\LocalizedException;
 use Magento\Quote\Api\CartRepositoryInterface as MageCartRepositoryInterface;
 use Magento\Quote\Api\Data\CartItemInterfaceFactory as MageCartItemInterfaceFactory;
 use Magento\Quote\Api\CartManagementInterfaceFactory;
@@ -26,6 +27,8 @@ use Magento\Checkout\Model\ShippingInformationFactory;
 use Magento\Checkout\Api\PaymentInformationManagementInterfaceFactory;
 use Magento\Quote\Api\Data\PaymentInterfaceFactory;
 use AlbertMage\Quote\Model\TotalsManagement;
+use Magento\Sales\Api\Data\OrderInterface;
+use AlbertMage\Sales\Api\Data\OrderInterfaceFactory;
 
 /**
  * Class CheckoutManagement
@@ -124,7 +127,17 @@ class CheckoutManagement implements CheckoutManagementInterface
      * @var TotalsManagement
      */
     protected $totalsManagement;
-    
+
+    /**
+     * @var OrderInterface
+     */
+    protected $order;
+
+    /**
+     * @var OrderInterfaceFactory
+     */
+    protected $orderInterfaceFactory;
+
     /**
      * @param MageCartRepositoryInterface $quoteRepository
      * @param CartInterface $cart
@@ -143,6 +156,8 @@ class CheckoutManagement implements CheckoutManagementInterface
      * @param PaymentInterfaceFactory $paymentInterfaceFactory
      * @param SocialAccountInterfaceFactory $socialAccountInterfaceFactory
      * @param TotalsManagement $totalsManagement
+     * @param OrderInterface $order
+     * @param OrderInterfaceFactory $orderInterfaceFactory
      */
     public function __construct(
         MageCartRepositoryInterface $quoteRepository,
@@ -161,7 +176,9 @@ class CheckoutManagement implements CheckoutManagementInterface
         PaymentInformationManagementInterfaceFactory $paymentInformationManagementInterfaceFactory,
         PaymentInterfaceFactory $paymentInterfaceFactory,
         SocialAccountInterfaceFactory $socialAccountInterfaceFactory,
-        TotalsManagement $totalsManagement
+        TotalsManagement $totalsManagement,
+        OrderInterface $order,
+        OrderInterfaceFactory $orderInterfaceFactory
     ) {
         $this->quoteRepository = $quoteRepository;
         $this->cart = $cart;
@@ -180,6 +197,8 @@ class CheckoutManagement implements CheckoutManagementInterface
         $this->paymentInterfaceFactory = $paymentInterfaceFactory;
         $this->socialAccountInterfaceFactory = $socialAccountInterfaceFactory;
         $this->totalsManagement = $totalsManagement;
+        $this->order = $order;
+        $this->orderInterfaceFactory = $orderInterfaceFactory;
     }
 
     /**
@@ -187,14 +206,13 @@ class CheckoutManagement implements CheckoutManagementInterface
      */
     public function getMineCartTotals($customerId)
     {
-
         //create quote if not exist
         try {
             $this->quoteRepository->getActiveForCustomer($customerId);
         } catch (NoSuchEntityException $e) {
             $this->cartManagementInterfaceFactory->create()->createEmptyCartForCustomer($customerId);
         }
-        
+
         $cart = $this->cart->load($customerId, 'customer_id');
 
         return $this->generateCartTotals($cart);
@@ -300,7 +318,11 @@ class CheckoutManagement implements CheckoutManagementInterface
      */
     public function minePlaceOrder($cartId, ShippingAddressInterface $address, $paymentMethod)
     {
-        return $this->placeOrder($cartId, $address, $paymentMethod);
+        try {
+            return $this->placeOrder($cartId, $address, $paymentMethod);
+        } catch (\Exception $e) {
+            throw new LocalizedException(__($e->getMessage()), $e, 4100);
+        }   
     }
 
     /**
@@ -314,7 +336,7 @@ class CheckoutManagement implements CheckoutManagementInterface
             throw new NoSuchEntityException(__('Invalid guest token.'));
         }
 
-        $cart = $this->cart->load($guest->getOpenId(), 'guest_id');
+        $cart = $this->cart->load($guest->getId(), 'guest_id');
 
         return $this->placeOrder($cart->getQuoteId(), $address, $paymentMethod);
     }
@@ -325,7 +347,7 @@ class CheckoutManagement implements CheckoutManagementInterface
      * @param int $cartId
      * @param \AlbertMage\Checkout\Api\Data\ShippingAddressInterface $address
      * @param string paymentMethod
-     * @return int Order ID.
+     * @return \AlbertMage\Sales\Api\Data\OrderInterface Order.
      * @throws \Magento\Framework\Exception\LocalizedException
      */
     private function placeOrder($cartId, ShippingAddressInterface $address, $paymentMethod)
@@ -341,7 +363,11 @@ class CheckoutManagement implements CheckoutManagementInterface
         
         $payment->setMethod($paymentMethod);
 
-        return (int) $paymentInformationManagement->savePaymentInformationAndPlaceOrder($cartId, $payment);
+        $orderId = (int) $paymentInformationManagement->savePaymentInformationAndPlaceOrder($cartId, $payment);
+
+        $order = $this->order->load($orderId);
+
+        return $this->orderInterfaceFactory->create(['data' => $order->toArray()]);
 
     }
 
@@ -365,7 +391,8 @@ class CheckoutManagement implements CheckoutManagementInterface
 
         $quote = $this->setAddressInformation($quote, $totalsInformation);
 
-        return $this->calculateQuoteTotalsByCartSort($quote);
+        return $this->calculateQuoteTotals($quote);
+        //return $this->calculateQuoteTotalsByCartSort($quote);
     }
 
     /**
@@ -379,10 +406,10 @@ class CheckoutManagement implements CheckoutManagementInterface
         $quote = $this->syncCartAndQuoteItems($cart);
 
         $address = $this->addressInterfaceFactory->create();
-        $address->setCountryId('ZH');
+        $address->setCountryId('CN');
         $totalsInformation = $this->totalsInformationInterfaceFactory->create();
-        $totalsInformation->setShippingMethodCode('freeshipping');
-        $totalsInformation->setShippingCarrierCode('freeshipping');
+        $totalsInformation->setShippingMethodCode(self::DEFAULT_DILIVERY_METHOD);
+        $totalsInformation->setShippingCarrierCode(self::DEFAULT_DILIVERY_METHOD);
         $totalsInformation->setAddress($address);
 
         $quote = $this->setAddressInformation($quote, $totalsInformation);
@@ -595,20 +622,21 @@ class CheckoutManagement implements CheckoutManagementInterface
      * @param \AlbertMage\Checkout\Api\Data\ShippingAddressInterface $address
      * @return \Magento\Quote\Api\Data\CartInterface
      */
-    private function saveAddressInformation($quote, ShippingAddressInterface $address)
+    private function saveAddressInformation($cartId, ShippingAddressInterface $address)
     {
         $shippingAddress = $this->addressInterfaceFactory->create();
         $billingAddress = $this->addressInterfaceFactory->create();
 
+        //['data' => $totalsData]
         $shippingAddress->setRegion($address->getRegion());
         $shippingAddress->setRegionId($address->getRegionId());
         $shippingAddress->setDistrict($address->getDistrict());
         $shippingAddress->setDistrictId($address->getDistrictId());
         $shippingAddress->setCity($address->getCity());
         $shippingAddress->setCityId($address->getCityId());
-        $shippingAddress->setStreet([$address->getStreet()]);
-        $shippingAddress->setCountryId(self::DEFAULT_COUNTRY_ID);
-        $shippingAddress->setPostcode(self::DEFAULT_POST_CODE);
+        $shippingAddress->setStreet($address->getStreet());
+        $shippingAddress->setCountryId($address->getCountryId());
+        $shippingAddress->setPostcode($address->getPostcode());
         $shippingAddress->setFirstname($address->getFirstname());
         $shippingAddress->setLastname($address->getLastname());
         $shippingAddress->setEmail($address->getEmail());
@@ -620,9 +648,9 @@ class CheckoutManagement implements CheckoutManagementInterface
         $billingAddress->setDistrictId($address->getDistrictId());
         $billingAddress->setCity($address->getCity());
         $billingAddress->setCityId($address->getCityId());
-        $billingAddress->setStreet([$address->getStreet()]);
-        $billingAddress->setCountryId(self::DEFAULT_COUNTRY_ID);
-        $billingAddress->setPostcode(self::DEFAULT_POST_CODE);
+        $billingAddress->setStreet($address->getStreet());
+        $billingAddress->setCountryId($address->getCountryId());
+        $billingAddress->setPostcode($address->getPostcode());
         $billingAddress->setFirstname($address->getFirstname());
         $billingAddress->setLastname($address->getLastname());
         $billingAddress->setEmail($address->getEmail());

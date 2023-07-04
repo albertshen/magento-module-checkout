@@ -15,7 +15,7 @@ interface CheckoutManagementInterface
 
     const DEFAULT_COUNTRY_ID = 'CN';
 
-    const DEFAULT_DILIVERY_METHOD = 'flatrate';
+    const DEFAULT_DILIVERY_METHOD = 'sfshipping';
 
     const DEFAULT_POST_CODE = '000000';
 
@@ -82,7 +82,7 @@ interface CheckoutManagementInterface
      * @param int $cartId
      * @param \AlbertMage\Checkout\Api\Data\ShippingAddressInterface $address
      * @param string paymentMethod
-     * @return int Order ID.
+     * @return \AlbertMage\Sales\Api\Data\OrderInterface Order.
      * @throws \Magento\Framework\Exception\LocalizedException
      */
     public function minePlaceOrder($cartId, ShippingAddressInterface $address, $paymentMethod);
@@ -93,7 +93,7 @@ interface CheckoutManagementInterface
      * @param string $guestToken
      * @param \AlbertMage\Checkout\Api\Data\ShippingAddressInterface $address
      * @param string paymentMethod
-     * @return int Order ID.
+     * @return \AlbertMage\Sales\Api\Data\OrderInterface Order.
      * @throws \Magento\Framework\Exception\LocalizedException
      */
     public function guestPlaceOrder($guestToken, ShippingAddressInterface $address, $paymentMethod);
